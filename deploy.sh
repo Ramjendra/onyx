@@ -3,13 +3,13 @@ set -euo pipefail
 
 REMOTE_USER="${REMOTE_USER:-}"
 REMOTE_HOST="${REMOTE_HOST:-}"
-REMOTE_PATH="${REMOTE_PATH:-/var/www/onyx}"
+REMOTE_PATH="${REMOTE_PATH:-}"
 SSH_KEY_PATH="${SSH_KEY_PATH:-}"
 SSH_PORT="${SSH_PORT:-22}"
 REMOTE_RESTART_CMD="${REMOTE_RESTART_CMD:-}"
 
-if [[ -z "$REMOTE_USER" || -z "$REMOTE_HOST" ]]; then
-  echo "ERROR: Please set REMOTE_USER and REMOTE_HOST before running this script."
+if [[ -z "$REMOTE_USER" || -z "$REMOTE_HOST" || -z "$REMOTE_PATH" ]]; then
+  echo "ERROR: Please set REMOTE_USER, REMOTE_HOST, and REMOTE_PATH before running this script."
   echo "Example: REMOTE_USER=ubuntu REMOTE_HOST=example.com REMOTE_PATH=/var/www/onyx ./deploy.sh"
   exit 1
 fi
