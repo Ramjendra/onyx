@@ -1,0 +1,176 @@
+let alerts = [];
+let currentIndex = 0;
+
+async function loadAlerts() {
+  const response = await fetch('/api/alerts');
+  alerts = await response.json();
+  renderAlerts();
+  renderDetail();
+  updateMetrics();
+}
+
+function getSeverityClass(level) {
+  if (level === 'high') return 'high';
+  if (level === 'medium') return 'medium';
+  return 'low';
+}
+
+function updateScenarioSummary() {
+  const scenarioCount = document.getElementById('scenario-count');
+  const scenarioSeverity = document.getElementById('scenario-severity');
+
+  if (!alerts.length) {
+    if (scenarioCount) scenarioCount.textContent = 'Case 0 of 0';
+    if (scenarioSeverity) {
+      scenarioSeverity.textContent = 'LOW';
+      scenarioSeverity.className = 'badge low';
+    }
+    return;
+  }
+
+  const item = alerts[currentIndex];
+  if (!item) return;
+
+  if (scenarioCount) scenarioCount.textContent = `Case ${currentIndex + 1} of ${alerts.length}`;
+  if (scenarioSeverity) {
+    scenarioSeverity.textContent = item.severity.toUpperCase();
+    scenarioSeverity.className = `badge ${getSeverityClass(item.severity)}`;
+  }
+}
+
+function renderAlerts() {
+  const list = document.getElementById('alert-list');
+  if (!alerts.length) {
+    list.innerHTML = '<div class="summary">Loading risk alerts...</div>';
+    return;
+  }
+
+  list.innerHTML = alerts
+    .map((item, index) => {
+      const active = index === currentIndex ? 'active' : '';
+      return `
+        <div class="alert-item ${active}" data-index="${index}">
+          <div class="alert-title">
+            <strong>${item.title}</strong>
+            <span class="badge ${getSeverityClass(item.severity)}">${item.severity.toUpperCase()}</span>
+          </div>
+          <div class="alert-meta">${item.sender} → ${item.recipient} • ${item.timestamp}</div>
+          <div class="summary">${item.summary}</div>
+        </div>
+      `;
+    })
+    .join('');
+
+  list.querySelectorAll('.alert-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      currentIndex = Number(item.dataset.index);
+      renderAlerts();
+      renderDetail();
+    });
+  });
+}
+
+function renderDetail() {
+  const item = alerts[currentIndex];
+  if (!item) return;
+  const evidence = document.getElementById('evidence-card');
+  const action = document.getElementById('action-card');
+
+  updateScenarioSummary();
+
+  evidence.innerHTML = `
+    <h3>${item.title}</h3>
+    <p class="summary">${item.summary}</p>
+    <div class="details-row">
+      <span class="meta-pill">Department: ${item.department || 'Compliance'}</span>
+      <span class="score-pill">Risk score: ${item.score}/100</span>
+    </div>
+    <ul>
+      ${item.reasons.map((reason) => `<li>${reason}</li>`).join('')}
+    </ul>
+  `;
+
+  action.innerHTML = `
+    <h3>Recommended response</h3>
+    <ul>
+      ${item.recommendedActions.map((actionItem) => `<li>${actionItem}</li>`).join('')}
+    </ul>
+    <h3>Evidence captured</h3>
+    <ul>
+      ${item.evidence.map((entry) => `<li>${entry}</li>`).join('')}
+    </ul>
+  `;
+}
+
+function updateMetrics() {
+  const total = alerts.length;
+  const escalations = alerts.filter((item) => item.severity === 'high').length;
+  const accuracy = 96;
+
+  document.getElementById('active-alerts').textContent = total;
+  document.getElementById('escalations').textContent = escalations;
+  document.getElementById('accuracy').textContent = `${accuracy}%`;
+  updateScenarioSummary();
+}
+
+function clearDashboard() {
+  alerts = [];
+  currentIndex = 0;
+  renderAlerts();
+  renderDetail();
+  updateMetrics();
+  const status = document.getElementById('upload-status');
+  status.textContent = 'Dashboard cleared. Upload a new JSON to start a fresh demo.';
+  status.classList.remove('upload-error');
+}
+
+async function handleUpload(event) {
+  const file = event.target.files[0];
+  const status = document.getElementById('upload-status');
+  if (!file) return;
+
+  status.textContent = 'Uploading sample data...';
+  status.classList.remove('upload-error');
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch('/api/upload', {
+    method: 'POST',
+    body: formData,
+  });
+
+  const payload = await response.json();
+  event.target.value = '';
+
+  if (!response.ok) {
+    status.textContent = `Upload failed: ${payload.error}`;
+    status.classList.add('upload-error');
+    return;
+  }
+
+  const startIndex = alerts.length;
+  alerts = [...alerts, ...payload.alerts];
+  currentIndex = startIndex;
+
+  status.textContent = `Upload complete — ${payload.added} alerts generated.`;
+  status.classList.remove('upload-error');
+  renderAlerts();
+  renderDetail();
+  updateMetrics();
+}
+
+function runNextScenario() {
+  currentIndex = (currentIndex + 1) % alerts.length;
+  renderAlerts();
+  renderDetail();
+}
+
+document.getElementById('demo-button').addEventListener('click', runNextScenario);
+document.getElementById('clean-button').addEventListener('click', clearDashboard);
+
+const uploadInput = document.getElementById('file-upload');
+if (uploadInput) {
+  uploadInput.addEventListener('change', handleUpload);
+}
+
+loadAlerts();

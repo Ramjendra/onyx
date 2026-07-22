@@ -1,0 +1,51 @@
+[
+  {
+    "source": "email",
+    "sender": "michael.tan@businesscorp.com",
+    "recipient": "jane.doe@gmail.com",
+    "subject": "Q4 acquisition details",
+    "timestamp": "2026-07-21T09:12:00Z",
+    "body": "Hi Jane, please see the attached acquisition pricing model for the target company. This is still confidential and not for external distribution.",
+    "riskTags": ["external recipient", "confidential", "M&A"],
+    "riskLevel": "high"
+  },
+  {
+    "source": "slack",
+    "sender": "andrew_lee",
+    "channel": "#trade-alerts",
+    "recipient": "@external_broker",
+    "timestamp": "2026-07-21T22:30:00Z",
+    "message": "Can you keep the 2.1x multiple and revenue assumptions quiet until after the call? No internal distribution.",
+    "riskTags": ["external contact", "confidential guidance", "off-hours"],
+    "riskLevel": "high"
+  },
+  {
+    "source": "teams",
+    "sender": "anna.carter@businesscorp.com",
+    "recipient": "global-strategy@businesscorp.com",
+    "timestamp": "2026-07-21T16:45:00Z",
+    "message": "Attached the draft earnings forecast that includes the non-public margin assumptions. Only share with the Core Strategy subgroup.",
+    "riskTags": ["sensitive financials", "restricted channel", "broad audience"],
+    "riskLevel": "medium"
+  },
+  {
+    "source": "email",
+    "sender": "kevin.james@businesscorp.com",
+    "recipient": "outside-legal@consultingfirm.com",
+    "subject": "Draft deal memo",
+    "timestamp": "2026-07-21T18:05:00Z",
+    "body": "Please review the draft deal memo and confirm whether the pricing detail can be shared with your team. Do not circulate beyond the recipients.",
+    "riskTags": ["external advisor", "pricing detail", "sensitive legal"],
+    "riskLevel": "medium"
+  },
+  {
+    "source": "slack",
+    "sender": "sophia.martin",
+    "channel": "#general",
+    "recipient": "@all",
+    "timestamp": "2026-07-21T14:22:00Z",
+    "message": "FYI: The client renewal target is $28M and we need to keep the product roadmap conversation internal until after Q3 close.",
+    "riskTags": ["internal but broad", "sensitive target", "early disclosure"],
+    "riskLevel": "low"
+  }
+]

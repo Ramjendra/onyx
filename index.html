@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blackstone - AgentiAI Insider Risk Demo</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">AgentiAI Compliance Copilot</p>
+          <h1>Blackstone Insider Risk Monitor</h1>
+          <p class="subtitle">
+            AI-powered monitoring for employee communications, suspicious data sharing,
+            and rapid escalation to compliance teams.
+          </p>
+          <div class="hero-actions">
+            <button id="demo-button">Run next alert scenario</button>
+            <button id="clean-button" class="clean-button">Clear dashboard</button>
+            <a href="#architecture">View solution flow</a>
+          </div>
+          <div class="hero-chips">
+            <span class="chip">Coverage: 6 data sources</span>
+            <span class="chip">Latency: &lt; 2 min</span>
+            <span class="chip">Policy match: 97%</span>
+          </div>
+          <div class="upload-panel">
+            <label class="upload-label" for="file-upload">Upload sample data</label>
+            <input id="file-upload" type="file" accept="application/json" />
+            <a id="download-sample" class="download-link" href="/sample_data/sample_messages.json" download>Download sample JSON</a>
+            <a id="download-fresh" class="download-link" href="/sample_data/fresh_risk_messages.json" download>Download fresh risk JSON</a>
+            <div id="upload-status" class="upload-status"></div>
+          </div>
+        </div>
+        <div class="hero-metrics">
+          <div class="metric-card">
+            <strong id="active-alerts">0</strong>
+            <span>Active risk signals</span>
+          </div>
+          <div class="metric-card">
+            <strong id="escalations">0</strong>
+            <span>Escalated cases</span>
+          </div>
+          <div class="metric-card">
+            <strong id="accuracy">0%</strong>
+            <span>Policy match confidence</span>
+          </div>
+          <div class="metric-card metric-card-compact">
+            <span class="metric-label">Current scenario</span>
+            <strong id="scenario-count">Case 0 of 0</strong>
+            <span id="scenario-severity" class="badge low">LOW</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="dashboard">
+        <section class="panel panel-left">
+          <div class="panel-header">
+            <h2>Live risk signals</h2>
+            <span class="pill">Real-time watchlist</span>
+          </div>
+          <div id="alert-list" class="alert-list"></div>
+        </section>
+
+        <section class="panel panel-center">
+          <div class="panel-header">
+            <h2>Communication evidence</h2>
+            <span class="pill">AI-generated summary</span>
+          </div>
+          <div id="evidence-card" class="evidence-card"></div>
+        </section>
+
+        <section class="panel panel-right">
+          <div class="panel-header">
+            <h2>Compliance action</h2>
+            <span class="pill">Escalation workflow</span>
+          </div>
+          <div id="action-card" class="action-card"></div>
+        </section>
+      </main>
+
+      <section id="architecture" class="architecture">
+        <h2>How the solution works</h2>
+        <div class="flow-grid">
+          <article>
+            <h3>1. Ingest</h3>
+            <p>Connect to email, chat, Teams, Slack, and collaboration channels.</p>
+          </article>
+          <article>
+            <h3>2. Analyze</h3>
+            <p>Use NLP and policy rules to detect sensitive terms, external recipients, and unusual timing.</p>
+          </article>
+          <article>
+            <h3>3. Score</h3>
+            <p>Generate a risk score and explain the reasons with evidence and context.</p>
+          </article>
+          <article>
+            <h3>4. Escalate</h3>
+            <p>Notify compliance and preserve the case as a monitored investigation.</p>
+          </article>
+        </div>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

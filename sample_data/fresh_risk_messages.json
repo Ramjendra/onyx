@@ -1,0 +1,51 @@
+[
+  {
+    "source": "email",
+    "sender": "denise.king@businesscorp.com",
+    "recipient": "contractor@externalfirm.com",
+    "subject": "Urgent: New client pricing model",
+    "timestamp": "2026-07-22T08:30:00Z",
+    "body": "Please review the attached client pricing model. Keep this confidential until we finalize the board memo.",
+    "riskTags": ["external recipient", "pricing model", "confidential"],
+    "riskLevel": "high"
+  },
+  {
+    "source": "slack",
+    "sender": "rohit.patel",
+    "channel": "#trading-desk",
+    "recipient": "@global_sales",
+    "timestamp": "2026-07-22T11:15:00Z",
+    "message": "We should not share the acquisition target details outside the core team until the announcement. I’m flagging this as restricted.",
+    "riskTags": ["restricted channel", "internal leak", "deal prep"],
+    "riskLevel": "medium"
+  },
+  {
+    "source": "teams",
+    "sender": "elena.ross@businesscorp.com",
+    "recipient": "finance-leads@businesscorp.com",
+    "timestamp": "2026-07-22T14:50:00Z",
+    "message": "The revised forecast includes sensitive margin details and is only for the finance leadership group. Do not forward.",
+    "riskTags": ["sensitive financials", "limited audience", "non-public"],
+    "riskLevel": "medium"
+  },
+  {
+    "source": "email",
+    "sender": "greg.santos@businesscorp.com",
+    "recipient": "legal-support@lawfirm.com",
+    "subject": "Draft NDA terms and client valuation",
+    "timestamp": "2026-07-22T17:05:00Z",
+    "body": "Attached are the NDA terms and the client valuation estimate. This should only be used by your legal review team.",
+    "riskTags": ["legal review", "sensitive terms", "external advisor"],
+    "riskLevel": "high"
+  },
+  {
+    "source": "slack",
+    "sender": "maya.liu",
+    "channel": "#all-hands",
+    "recipient": "@channel",
+    "timestamp": "2026-07-22T19:20:00Z",
+    "message": "FYI: Our Q4 revenue target is $52M and this number should remain internal until after guidance is released.",
+    "riskTags": ["early disclosure", "broad audience", "sensitive target"],
+    "riskLevel": "low"
+  }
+]
