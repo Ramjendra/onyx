@@ -32,6 +32,11 @@ The script will:
 - stop any previously started local app process tracked by `.deploy.pid`
 - start the app and write its PID to `.deploy.pid`
 
+To stop the app later, run:
+```bash
+./stop.sh
+```
+
 Then open:
 ```bash
 http://localhost:5000/
