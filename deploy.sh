@@ -48,16 +48,18 @@ pip install -r requirements.txt
 '
 "
 
-if [[ -n "$REMOTE_RESTART_CMD" ]]; then
-  echo "Running remote restart command: $REMOTE_RESTART_CMD"
-  ssh "${SSH_OPTS[@]}" "${REMOTE_USER}@${REMOTE_HOST}" bash -lc "'
+if [[ -z "$REMOTE_RESTART_CMD" ]]; then
+  echo "No REMOTE_RESTART_CMD provided; using default restart logic."
+  REMOTE_RESTART_CMD="if [[ -f .deploy.pid ]]; then kill \$(cat .deploy.pid) || true; fi && nohup .venv/bin/python app.py > app.log 2>&1 & echo \"\$!\" > .deploy.pid"
+else
+  echo "Using provided restart command: $REMOTE_RESTART_CMD"
+fi
+
+ssh "${SSH_OPTS[@]}" "${REMOTE_USER}@${REMOTE_HOST}" bash -lc "'
 set -euo pipefail
 cd \"$REMOTE_PATH\"
 $REMOTE_RESTART_CMD
 '
 "
-else
-  echo "No remote restart command provided. If you want the app to restart automatically, set REMOTE_RESTART_CMD before running deploy.sh."
-fi
 
 echo "Deployment complete."
