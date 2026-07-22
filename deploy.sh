@@ -16,7 +16,26 @@ if ! command -v "$PYTHON_CMD" >/dev/null 2>&1; then
   exit 1
 fi
 
-"$PYTHON_CMD" -m venv .venv
+create_venv() {
+  "$PYTHON_CMD" -m venv .venv
+}
+
+if ! create_venv >/dev/null 2>&1; then
+  echo "Local venv creation failed. Trying to install python3-venv on Debian/Ubuntu..."
+  if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get install -y python3-venv
+    if ! create_venv >/dev/null 2>&1; then
+      echo "ERROR: Failed to create virtual environment after installing python3-venv."
+      exit 1
+    fi
+  else
+    echo "ERROR: venv creation failed and apt-get is not available to install python3-venv."
+    echo "Install the system package manually and retry."
+    exit 1
+  fi
+fi
+
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
