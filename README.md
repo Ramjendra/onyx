@@ -1,6 +1,6 @@
-# Blackstone AgentiAI Insider Risk Demo
+# Onyx Insider Risk Demo
 
-This workspace contains a lightweight browser-based demo for presenting an insider-trading prevention concept to a client.
+This workspace contains the Onyx insider risk demo: a browser-based UI backed by a Flask API for mock communication monitoring and department triage.
 
 ## What it shows
 - AI-assisted monitoring of employee communications
