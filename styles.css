@@ -116,3 +116,26 @@ a { color: var(--text); background: rgba(255,255,255,0.08); }
   .hero { flex-direction: column; }
   .flow-grid { grid-template-columns: 1fr; }
 }
+
+/* SLM status indicator */
+.slm-status {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
+  padding: 6px 14px; border-radius: 999px; font-size: 0.82rem;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+  color: var(--muted); transition: all 300ms ease;
+}
+.slm-status.connected { border-color: rgba(56,189,248,0.4); color: var(--success); background: rgba(56,189,248,0.08); }
+.slm-status.disconnected { border-color: rgba(255,107,107,0.3); color: var(--danger); background: rgba(255,107,107,0.06); }
+
+.slm-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  background: var(--muted); transition: background 300ms ease;
+}
+.slm-dot.checking { animation: slm-pulse 1.2s infinite ease-in-out; background: var(--warning); }
+.slm-dot.connected { background: var(--success); box-shadow: 0 0 6px rgba(56,189,248,0.5); }
+.slm-dot.disconnected { background: var(--danger); }
+
+@keyframes slm-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.15); }
+}

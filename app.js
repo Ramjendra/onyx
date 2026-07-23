@@ -82,6 +82,7 @@ function renderDetail() {
   const predictiveScore = item.predictiveScore ?? item.score;
   const delta = predictiveScore - heuristicScore;
   const deltaText = delta >= 0 ? `+${delta}` : `${delta}`;
+  const modelLabel = item.modelName ? `${item.modelName} (${item.modelVersion || 'v1'})` : 'Rule-based demo';
 
   evidence.innerHTML = `
     <h3>${item.title}</h3>
@@ -103,6 +104,7 @@ function renderDetail() {
     <div class="details-row">
       <span class="meta-pill">Department: ${item.department || 'Compliance'}</span>
       <span class="score-pill">${item.scoringMode === 'predictive' ? 'Active mode: Predictive' : 'Active mode: Heuristic'}</span>
+      <span class="meta-pill">Model: ${modelLabel}</span>
     </div>
     ${item.predictionExplanation ? `
       <div class="explanation-box">
@@ -201,4 +203,31 @@ if (uploadInput) {
   uploadInput.addEventListener('change', handleUpload);
 }
 
+async function checkModelStatus() {
+  const statusEl = document.getElementById('slm-status');
+  const labelEl = document.getElementById('slm-label');
+  const dotEl = statusEl?.querySelector('.slm-dot');
+  if (!statusEl || !labelEl || !dotEl) return;
+
+  try {
+    const resp = await fetch('/api/model-status');
+    const data = await resp.json();
+
+    if (data.available) {
+      statusEl.className = 'slm-status connected';
+      dotEl.className = 'slm-dot connected';
+      labelEl.textContent = `SLM connected — ${data.model} (${data.backend})`;
+    } else {
+      statusEl.className = 'slm-status disconnected';
+      dotEl.className = 'slm-dot disconnected';
+      labelEl.textContent = `SLM offline — using ${data.backend} scoring`;
+    }
+  } catch {
+    statusEl.className = 'slm-status disconnected';
+    dotEl.className = 'slm-dot disconnected';
+    labelEl.textContent = 'SLM unreachable — using fallback scoring';
+  }
+}
+
 loadAlerts();
+checkModelStatus();

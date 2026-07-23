@@ -3,6 +3,15 @@ from email.parser import BytesParser
 from email.utils import parseaddr
 from flask import Flask, jsonify, send_from_directory, request
 import json
+import logging
+import os
+import re
+import time
+import urllib.request
+import urllib.parse
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger('onyx')
 
 app = Flask(__name__)
 
@@ -103,74 +112,247 @@ def determine_department(record):
     return 'Compliance'
 
 
-def calculate_predictive_score(record):
-    score = 35
+def build_feature_vector(record):
     tags = _normalize_tags(record)
-    source = record.get('source', '').lower()
-    recipient = record.get('recipient', '').lower()
+    source = str(record.get('source', '')).lower()
+    recipient = str(record.get('recipient', '')).lower()
     message = ' '.join([
-        record.get('message', ''),
-        record.get('body', ''),
-        record.get('subject', ''),
+        str(record.get('message', '')),
+        str(record.get('body', '')),
+        str(record.get('subject', '')),
         ' '.join(tags),
         source,
         recipient,
     ]).lower()
 
-    explanation = []
-    risk_level = record.get('riskLevel', 'low').lower()
-    if risk_level == 'high':
-        score += 24
-        explanation.append('High severity label increases the risk posture.')
-    elif risk_level == 'medium':
-        score += 14
-        explanation.append('Medium severity label contributes to the score.')
-    else:
-        score += 6
-        explanation.append('Low severity label provides a baseline risk increase.')
-
-    feature_weights = {
-        'external recipient': 16,
-        'external contact': 14,
-        'broker': 14,
-        'trading': 12,
-        'sensitive': 16,
-        'restricted': 14,
-        'encrypted': 10,
-        'insider': 18,
-        'legal': 8,
-        'finance': 8,
-        'pricing': 8,
-        'customer pricing': 10,
-        'p&l': 10,
-        'm&a': 10,
-        'acquisition': 12,
-        'deal': 10,
-        'confidential': 10,
-        'personal': 9,
-        'board prep': 8,
-        'earnings': 7,
-        'forwarded': 8,
-        'download': 8,
+    return {
+        'risk_level': str(record.get('riskLevel', 'low')).lower(),
+        'source_email': 1 if source == 'email' else 0,
+        'source_slack': 1 if source == 'slack' else 0,
+        'source_teams': 1 if source == 'teams' else 0,
+        'external_recipient': 1 if 'external recipient' in tags or 'external contact' in tags else 0,
+        'sensitive_content': 1 if 'sensitive' in tags or 'restricted' in tags or 'confidential' in tags else 0,
+        'acquisition_context': 1 if 'm&a' in tags or 'acquisition' in tags or 'deal' in tags else 0,
+        'price_context': 1 if 'pricing' in tags or 'customer pricing' in tags or 'p&l' in tags else 0,
+        'personal_domain': 1 if 'personal' in recipient or '@gmail.com' in recipient or '@outlook.com' in recipient else 0,
+        'message_length': len(message),
+        'contains_forwarded': 1 if 'forwarded' in message else 0,
+        'contains_download': 1 if 'download' in message else 0,
     }
 
-    for feature, weight in feature_weights.items():
-        if feature in message:
+
+SLM_SYSTEM_PROMPT = """You are a compliance risk scoring engine for an insider risk monitoring system.
+You receive employee communication records and must assess the risk of policy violations.
+
+You MUST respond with ONLY a valid JSON object (no markdown, no explanation outside JSON) with these exact keys:
+- "score": integer 0-100 (0=no risk, 100=critical risk)
+- "explanation": array of 2-4 short strings explaining the score
+- "modelName": string, always "llama3.1"
+- "modelVersion": string, always "8b-q4"
+
+Scoring guidelines:
+- 0-30: Routine communication, no policy flags
+- 31-60: Minor concerns, warrants monitoring
+- 61-80: Significant risk indicators present
+- 81-100: Critical risk, immediate escalation recommended
+
+Key risk factors to evaluate:
+- External/personal recipients for sensitive data
+- Non-public financial or M&A information
+- Off-hours or unusual timing patterns
+- Use of non-approved channels
+- Bulk data access or downloads"""
+
+
+def _extract_json_from_response(text):
+    """Extract JSON from model response, handling markdown wrapping."""
+    if not text or not text.strip():
+        return None
+    text = text.strip()
+    md_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
+    if md_match:
+        text = md_match.group(1).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        obj_match = re.search(r'\{[\s\S]*\}', text)
+        if obj_match:
+            try:
+                return json.loads(obj_match.group(0))
+            except json.JSONDecodeError:
+                pass
+    return None
+
+
+def _validate_slm_output(parsed, model_name_fallback):
+    """Normalize and validate parsed SLM output into a standard dict."""
+    if not isinstance(parsed, dict):
+        raise ValueError('SLM response is not a JSON object')
+
+    score = parsed.get('score')
+    if score is None:
+        raise ValueError('SLM response missing score')
+    score = int(score)
+    score = max(0, min(100, score))
+
+    explanation = parsed.get('explanation') or parsed.get('reason')
+    if isinstance(explanation, str):
+        explanation = [explanation]
+    if not isinstance(explanation, list) or not explanation:
+        explanation = ['SLM inference completed without detailed explanation.']
+
+    return {
+        'score': score,
+        'explanation': explanation,
+        'modelName': parsed.get('modelName') or model_name_fallback,
+        'modelVersion': parsed.get('modelVersion') or 'ollama-local',
+    }
+
+
+def _call_ollama(record, feature_vector):
+    """Call the local Ollama instance for risk scoring."""
+    endpoint = os.getenv('MODEL_ENDPOINT', 'http://127.0.0.1:11434/api/generate')
+    model_name = os.getenv('MODEL_NAME', 'llama3.1:latest')
+    timeout = int(os.getenv('MODEL_TIMEOUT', '60'))
+
+    prompt = (
+        f'Analyze this employee communication record and produce a risk score.\n\n'
+        f'Record:\n'
+        f'  Source: {record.get("source", "unknown")}\n'
+        f'  Sender: {record.get("sender", "unknown")}\n'
+        f'  Recipient: {record.get("recipient", "unknown")}\n'
+        f'  Timestamp: {record.get("timestamp", "unknown")}\n'
+        f'  Risk Level Tag: {record.get("riskLevel", "low")}\n'
+        f'  Risk Tags: {", ".join(_normalize_tags(record)) or "none"}\n'
+        f'  Message: {record.get("message", record.get("body", "N/A"))}\n\n'
+        f'Feature Vector: {json.dumps(feature_vector)}\n\n'
+        f'Respond with ONLY the JSON object.'
+    )
+
+    payload = json.dumps({
+        'model': model_name,
+        'system': SLM_SYSTEM_PROMPT,
+        'prompt': prompt,
+        'stream': False,
+        'format': 'json',
+    }).encode('utf-8')
+
+    req = urllib.request.Request(
+        endpoint,
+        data=payload,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+
+    start = time.time()
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        result = json.loads(resp.read().decode('utf-8'))
+    elapsed = time.time() - start
+
+    content = result.get('response', '{}')
+    parsed = _extract_json_from_response(content) if isinstance(content, str) else content
+    if parsed is None:
+        raise ValueError(f'Could not parse Ollama response: {content[:200]}')
+
+    output = _validate_slm_output(parsed, model_name)
+    logger.info('Ollama SLM scored %d in %.1fs (model=%s)', output['score'], elapsed, model_name)
+    return output
+
+
+def _call_custom_endpoint(record, feature_vector, endpoint):
+    """Call an external SLM HTTP endpoint with structured JSON payload."""
+    timeout = int(os.getenv('MODEL_TIMEOUT', '30'))
+
+    payload = json.dumps({
+        'record': record,
+        'featureVector': feature_vector,
+    }).encode('utf-8')
+
+    req = urllib.request.Request(
+        endpoint,
+        data=payload,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+
+    start = time.time()
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        result = json.loads(resp.read().decode('utf-8'))
+    elapsed = time.time() - start
+
+    output = _validate_slm_output(result, os.getenv('MODEL_NAME', 'custom-slm'))
+    logger.info('Custom SLM scored %d in %.1fs (endpoint=%s)', output['score'], elapsed, endpoint)
+    return output
+
+
+def _fallback_demo_model(record, feature_vector):
+    score = 30
+    explanation = []
+
+    risk_level_weights = {
+        'high': 18,
+        'medium': 10,
+        'low': 4,
+    }
+    risk_level = str(record.get('riskLevel', 'low')).lower()
+    if risk_level in risk_level_weights:
+        score += risk_level_weights[risk_level]
+        explanation.append(f"Severity label '{risk_level}' contributed {risk_level_weights[risk_level]} points.")
+
+    feature_weights = {
+        'external_recipient': 16,
+        'sensitive_content': 18,
+        'acquisition_context': 14,
+        'price_context': 12,
+        'personal_domain': 10,
+        'contains_forwarded': 8,
+        'contains_download': 8,
+        'source_slack': 4,
+        'source_teams': 4,
+    }
+
+    for feature_name, weight in feature_weights.items():
+        if feature_vector.get(feature_name, 0):
             score += weight
-            explanation.append(f"Matched signal '{feature}' with a weighted impact of {weight}.")
+            explanation.append(f"Feature '{feature_name}' added {weight} points to the model score.")
 
-    if source in {'slack', 'teams'}:
+    if feature_vector.get('message_length', 0) > 220:
         score += 4
-        explanation.append('Collaboration-channel source adds a small risk lift.')
+        explanation.append('Longer message context added a modest signal lift.')
 
-    if 'personal' in recipient or '@gmail.com' in recipient or '@outlook.com' in recipient:
-        score += 8
-        explanation.append('Personal or consumer email destination increases exposure.')
+    if risk_level == 'high' and feature_vector.get('personal_domain'):
+        score += 4
+        explanation.append('High-severity handling to a personal destination amplified the scoring outcome.')
 
-    if not explanation:
-        explanation.append('No strong predictive features were detected beyond the baseline score.')
+    explanation.append('A demo linear risk model handled the final predictive inference.')
+    logger.info('Fallback demo model scored %d (SLM unavailable)', max(40, min(98, score)))
+    return {
+        'score': max(40, min(98, score)),
+        'explanation': explanation,
+        'modelName': 'demo-linear-risk-model',
+        'modelVersion': 'v1.0.0',
+    }
 
-    return max(40, min(98, score)), explanation
+
+def score_with_model(record):
+    feature_vector = build_feature_vector(record)
+    endpoint = os.getenv('MODEL_ENDPOINT', '')
+
+    try:
+        if endpoint and '/api/generate' not in endpoint:
+            model_output = _call_custom_endpoint(record, feature_vector, endpoint)
+        else:
+            model_output = _call_ollama(record, feature_vector)
+    except Exception as exc:
+        logger.warning('SLM call failed (%s), using fallback model', exc)
+        model_output = _fallback_demo_model(record, feature_vector)
+
+    return model_output['score'], model_output['explanation'], feature_vector, model_output['modelName'], model_output['modelVersion']
+
+
+def calculate_predictive_score(record):
+    score, explanation, _, _, _ = score_with_model(record)
+    return score, explanation
 
 alerts = [
     {
@@ -332,6 +514,33 @@ alerts = [
 ]
 
 
+@app.get('/api/model-status')
+def model_status():
+    endpoint = os.getenv('MODEL_ENDPOINT', 'http://127.0.0.1:11434/api/tags')
+    model_name = os.getenv('MODEL_NAME', 'llama3.1:latest')
+    is_custom = '/api/generate' not in endpoint and '/api/tags' not in endpoint
+
+    if is_custom:
+        backend = 'custom'
+        check_url = endpoint
+    else:
+        backend = 'ollama'
+        check_url = endpoint.rsplit('/api/', 1)[0] + '/api/tags' if '/api/generate' in endpoint else endpoint
+
+    try:
+        req = urllib.request.Request(check_url, method='GET')
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            available = resp.status == 200
+    except Exception:
+        available = False
+
+    return jsonify({
+        'available': available,
+        'model': model_name,
+        'backend': backend if available else 'fallback',
+    })
+
+
 @app.get('/api/alerts')
 def get_alerts():
     return jsonify(alerts)
@@ -365,11 +574,24 @@ def upload_data():
     for record in sample_data:
         department = determine_department(record)
         heuristic_score = 90 if record.get('riskLevel') == 'high' else 72 if record.get('riskLevel') == 'medium' else 52
-        predictive_score, prediction_explanation = calculate_predictive_score(record)
+        predictive_score, prediction_explanation, feature_vector, model_name, model_version = score_with_model(record)
         if scoring_mode == 'predictive':
             score = predictive_score
         else:
             score = heuristic_score
+
+        risk_signals = [
+            signal for signal in [
+                'risk_level',
+                'external_recipient',
+                'sensitive_content',
+                'acquisition_context',
+                'price_context',
+                'personal_domain',
+                'contains_forwarded',
+                'contains_download',
+            ] if feature_vector.get(signal)
+        ]
 
         entry = {
             'id': len(alerts) + len(entries) + 1,
@@ -383,6 +605,12 @@ def upload_data():
             'heuristicScore': heuristic_score,
             'predictiveScore': predictive_score,
             'predictionExplanation': prediction_explanation,
+            'featureVector': feature_vector,
+            'riskSignals': risk_signals,
+            'modelReady': True,
+            'modelName': model_name,
+            'modelVersion': model_version,
+            'scoringStrategy': 'model',
             'summary': record.get('message', record.get('body', 'Sample risk event')),
             'scoringMode': scoring_mode,
             'reasons': [
