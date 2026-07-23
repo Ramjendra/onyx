@@ -1,3 +1,6 @@
+from email import policy
+from email.parser import BytesParser
+from email.utils import parseaddr
 from flask import Flask, jsonify, send_from_directory, request
 import json
 
@@ -9,6 +12,76 @@ def _normalize_tags(record):
     if isinstance(tags, str):
         return [tags.lower()]
     return [str(tag).lower() for tag in tags]
+
+
+def _extract_email_body(message):
+    if message.is_multipart():
+        parts = []
+        for part in message.walk():
+            if part.get_content_maintype() == 'text':
+                content = part.get_content()
+                if isinstance(content, str):
+                    parts.append(content)
+        return '\n'.join(parts).strip()
+    return message.get_content().strip()
+
+
+def _infer_risk_tags(text):
+    text = text.lower()
+    tags = []
+    keyword_map = {
+        'external recipient': 'external recipient',
+        'external contact': 'external contact',
+        'broker': 'broker',
+        'trading': 'trading',
+        'sensitive': 'sensitive',
+        'restricted': 'restricted',
+        'encrypted': 'encrypted',
+        'insider': 'insider',
+        'legal': 'legal',
+        'finance': 'finance',
+        'pricing': 'pricing',
+        'customer pricing': 'customer pricing',
+        'p&l': 'p&l',
+        'm&a': 'm&a',
+        'acquisition': 'acquisition',
+        'deal': 'deal',
+        'confidential': 'confidential',
+        'personal': 'personal',
+        'board prep': 'board prep',
+        'earnings': 'earnings',
+        'forwarded': 'forwarded',
+        'download': 'download',
+    }
+
+    for phrase, tag in keyword_map.items():
+        if phrase in text:
+            tags.append(tag)
+
+    return tags
+
+
+def _parse_email_record(raw_bytes):
+    message = BytesParser(policy=policy.default).parsebytes(raw_bytes)
+    sender = parseaddr(message.get('From', ''))[1] or message.get('From', '').strip()
+    recipient = parseaddr(message.get('To', ''))[1] or message.get('To', '').strip()
+    subject = message.get('Subject', '').strip()
+    body = _extract_email_body(message)
+    text = ' '.join([subject, body, sender, recipient])
+    risk_tags = _infer_risk_tags(text)
+    risk_level = 'high' if any(tag in {'sensitive', 'confidential', 'acquisition', 'deal', 'pricing'} for tag in risk_tags) else 'medium' if risk_tags else 'low'
+
+    return {
+        'source': 'email',
+        'sender': sender,
+        'recipient': recipient,
+        'timestamp': message.get('Date', 'unknown'),
+        'riskLevel': risk_level,
+        'riskTags': risk_tags,
+        'subject': subject,
+        'message': body or subject,
+        'body': body,
+    }
 
 
 def determine_department(record):
@@ -274,10 +347,19 @@ def upload_data():
         scoring_mode = 'heuristic'
 
     uploaded_file = request.files['file']
+    filename = (uploaded_file.filename or '').lower()
+    raw_bytes = uploaded_file.read()
+
     try:
-        sample_data = json.load(uploaded_file)
+        if filename.endswith('.json'):
+            sample_data = json.loads(raw_bytes.decode('utf-8'))
+        else:
+            parsed_record = _parse_email_record(raw_bytes)
+            sample_data = [parsed_record]
     except json.JSONDecodeError:
         return jsonify({'error': 'Invalid JSON file'}), 400
+    except Exception as exc:
+        return jsonify({'error': f'Unable to parse uploaded file: {exc}'}), 400
 
     entries = []
     for record in sample_data:
