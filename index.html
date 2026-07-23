@@ -29,6 +29,11 @@
           <div class="upload-panel">
             <label class="upload-label" for="file-upload">Upload sample data</label>
             <input id="file-upload" type="file" accept="application/json" />
+            <label class="upload-label" for="scoring-mode">Scoring mode</label>
+            <select id="scoring-mode">
+              <option value="heuristic">Heuristic demo score</option>
+              <option value="predictive">Predictive weighted score</option>
+            </select>
             <a id="download-sample" class="download-link" href="/sample_data/sample_messages.json" download>Download sample JSON</a>
             <a id="download-fresh" class="download-link" href="/sample_data/fresh_risk_messages.json" download>Download fresh risk JSON</a>
             <div id="upload-status" class="upload-status"></div>

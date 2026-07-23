@@ -4,10 +4,18 @@ import json
 app = Flask(__name__)
 
 
+def _normalize_tags(record):
+    tags = record.get('riskTags', [])
+    if isinstance(tags, str):
+        return [tags.lower()]
+    return [str(tag).lower() for tag in tags]
+
+
 def determine_department(record):
-    tags = [tag.lower() for tag in record.get('riskTags', [])]
+    tags = _normalize_tags(record)
     source = record.get('source', '').lower()
-    if 'legal' in tags or 'confidential legal' in tags or 'outside-legal' in record.get('recipient', '').lower():
+    recipient = record.get('recipient', '').lower()
+    if 'legal' in tags or 'confidential legal' in tags or 'outside-legal' in recipient:
         return 'Legal'
     if 'finance' in tags or 'pricing' in tags or 'customer pricing' in ' '.join(tags) or 'p&l' in ' '.join(tags):
         return 'Finance'
@@ -20,6 +28,76 @@ def determine_department(record):
     if source == 'slack' or source == 'teams':
         return 'Communications'
     return 'Compliance'
+
+
+def calculate_predictive_score(record):
+    score = 35
+    tags = _normalize_tags(record)
+    source = record.get('source', '').lower()
+    recipient = record.get('recipient', '').lower()
+    message = ' '.join([
+        record.get('message', ''),
+        record.get('body', ''),
+        record.get('subject', ''),
+        ' '.join(tags),
+        source,
+        recipient,
+    ]).lower()
+
+    explanation = []
+    risk_level = record.get('riskLevel', 'low').lower()
+    if risk_level == 'high':
+        score += 24
+        explanation.append('High severity label increases the risk posture.')
+    elif risk_level == 'medium':
+        score += 14
+        explanation.append('Medium severity label contributes to the score.')
+    else:
+        score += 6
+        explanation.append('Low severity label provides a baseline risk increase.')
+
+    feature_weights = {
+        'external recipient': 16,
+        'external contact': 14,
+        'broker': 14,
+        'trading': 12,
+        'sensitive': 16,
+        'restricted': 14,
+        'encrypted': 10,
+        'insider': 18,
+        'legal': 8,
+        'finance': 8,
+        'pricing': 8,
+        'customer pricing': 10,
+        'p&l': 10,
+        'm&a': 10,
+        'acquisition': 12,
+        'deal': 10,
+        'confidential': 10,
+        'personal': 9,
+        'board prep': 8,
+        'earnings': 7,
+        'forwarded': 8,
+        'download': 8,
+    }
+
+    for feature, weight in feature_weights.items():
+        if feature in message:
+            score += weight
+            explanation.append(f"Matched signal '{feature}' with a weighted impact of {weight}.")
+
+    if source in {'slack', 'teams'}:
+        score += 4
+        explanation.append('Collaboration-channel source adds a small risk lift.')
+
+    if 'personal' in recipient or '@gmail.com' in recipient or '@outlook.com' in recipient:
+        score += 8
+        explanation.append('Personal or consumer email destination increases exposure.')
+
+    if not explanation:
+        explanation.append('No strong predictive features were detected beyond the baseline score.')
+
+    return max(40, min(98, score)), explanation
 
 alerts = [
     {
@@ -191,6 +269,10 @@ def upload_data():
     if 'file' not in request.files:
         return jsonify({'error': 'Missing file'}), 400
 
+    scoring_mode = request.args.get('mode', 'heuristic').lower()
+    if scoring_mode not in {'heuristic', 'predictive'}:
+        scoring_mode = 'heuristic'
+
     uploaded_file = request.files['file']
     try:
         sample_data = json.load(uploaded_file)
@@ -199,20 +281,32 @@ def upload_data():
 
     entries = []
     for record in sample_data:
+        department = determine_department(record)
+        heuristic_score = 90 if record.get('riskLevel') == 'high' else 72 if record.get('riskLevel') == 'medium' else 52
+        predictive_score, prediction_explanation = calculate_predictive_score(record)
+        if scoring_mode == 'predictive':
+            score = predictive_score
+        else:
+            score = heuristic_score
+
         entry = {
             'id': len(alerts) + len(entries) + 1,
             'title': f"{record.get('source', 'message').capitalize()} risk from {record.get('sender', 'unknown')}",
             'severity': record.get('riskLevel', 'low'),
-            'department': determine_department(record),
+            'department': department,
             'sender': record.get('sender', 'unknown'),
             'recipient': record.get('recipient', record.get('channel', 'unknown')),
             'timestamp': record.get('timestamp', 'unknown'),
-            'score': 90 if record.get('riskLevel') == 'high' else 72 if record.get('riskLevel') == 'medium' else 52,
+            'score': score,
+            'heuristicScore': heuristic_score,
+            'predictiveScore': predictive_score,
+            'predictionExplanation': prediction_explanation,
             'summary': record.get('message', record.get('body', 'Sample risk event')),
+            'scoringMode': scoring_mode,
             'reasons': [
-                f"Triage: {determine_department(record)}",
+                f"Triage: {department}",
                 f"Source: {record.get('source', 'unknown')}",
-                *[f"Tag: {tag}" for tag in record.get('riskTags', [])]
+                *[f"Tag: {tag}" for tag in _normalize_tags(record)]
             ],
             'recommendedActions': [
                 'Review message content and sender intent',
@@ -222,13 +316,13 @@ def upload_data():
             'evidence': [
                 *([record.get('subject')] if record.get('subject') else []),
                 record.get('message', record.get('body', '')),
-                f"Tags: {', '.join(record.get('riskTags', []))}"
+                f"Tags: {', '.join(_normalize_tags(record))}"
             ]
         }
         entries.append(entry)
 
     alerts.extend(entries)
-    return jsonify({'added': len(entries), 'alerts': entries})
+    return jsonify({'added': len(entries), 'alerts': entries, 'scoringMode': scoring_mode})
 
 
 @app.get('/')

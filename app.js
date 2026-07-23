@@ -78,13 +78,40 @@ function renderDetail() {
 
   updateScenarioSummary();
 
+  const heuristicScore = item.heuristicScore ?? item.score;
+  const predictiveScore = item.predictiveScore ?? item.score;
+  const delta = predictiveScore - heuristicScore;
+  const deltaText = delta >= 0 ? `+${delta}` : `${delta}`;
+
   evidence.innerHTML = `
     <h3>${item.title}</h3>
     <p class="summary">${item.summary}</p>
+    <div class="comparison-card">
+      <div class="comparison-score">
+        <span class="comparison-label">Heuristic</span>
+        <strong>${heuristicScore}/100</strong>
+      </div>
+      <div class="comparison-score comparison-highlight">
+        <span class="comparison-label">Predictive</span>
+        <strong>${predictiveScore}/100</strong>
+      </div>
+      <div class="comparison-delta ${delta >= 0 ? 'delta-up' : 'delta-down'}">
+        <span>Delta</span>
+        <strong>${deltaText}</strong>
+      </div>
+    </div>
     <div class="details-row">
       <span class="meta-pill">Department: ${item.department || 'Compliance'}</span>
-      <span class="score-pill">Risk score: ${item.score}/100</span>
+      <span class="score-pill">${item.scoringMode === 'predictive' ? 'Active mode: Predictive' : 'Active mode: Heuristic'}</span>
     </div>
+    ${item.predictionExplanation ? `
+      <div class="explanation-box">
+        <h3>Why the predictive score changed</h3>
+        <ul>
+          ${item.predictionExplanation.map((reason) => `<li>${reason}</li>`).join('')}
+        </ul>
+      </div>
+    ` : ''}
     <ul>
       ${item.reasons.map((reason) => `<li>${reason}</li>`).join('')}
     </ul>
@@ -127,6 +154,7 @@ function clearDashboard() {
 async function handleUpload(event) {
   const file = event.target.files[0];
   const status = document.getElementById('upload-status');
+  const scoringMode = document.getElementById('scoring-mode')?.value || 'heuristic';
   if (!file) return;
 
   status.textContent = 'Uploading sample data...';
@@ -134,7 +162,7 @@ async function handleUpload(event) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch('/api/upload', {
+  const response = await fetch(`/api/upload?mode=${encodeURIComponent(scoringMode)}`, {
     method: 'POST',
     body: formData,
   });
@@ -152,7 +180,7 @@ async function handleUpload(event) {
   alerts = [...alerts, ...payload.alerts];
   currentIndex = startIndex;
 
-  status.textContent = `Upload complete — ${payload.added} alerts generated.`;
+  status.textContent = `Upload complete — ${payload.added} ${scoringMode} alerts generated.`;
   status.classList.remove('upload-error');
   renderAlerts();
   renderDetail();

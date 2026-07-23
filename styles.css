@@ -84,6 +84,22 @@ a { color: var(--text); background: rgba(255,255,255,0.08); }
 .evidence-card h3, .action-card h3 { margin-top: 0; }
 .details-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 12px 0; }
 .meta-pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,0.08); color: var(--text); font-weight: 600; }
+.comparison-card {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 12px;
+}
+.comparison-score, .comparison-delta {
+  padding: 12px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+}
+.comparison-score strong, .comparison-delta strong { display: block; font-size: 1.1rem; margin-top: 4px; }
+.comparison-label { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.12em; }
+.comparison-highlight { background: rgba(78,163,255,0.14); border-color: rgba(78,163,255,0.36); }
+.comparison-delta.delta-up { background: rgba(56,189,248,0.12); }
+.comparison-delta.delta-down { background: rgba(255,107,107,0.14); }
+.explanation-box {
+  margin: 12px 0; padding: 12px; border-radius: 14px; background: rgba(78,163,255,0.08);
+  border: 1px solid rgba(78,163,255,0.24);
+}
+.explanation-box h3 { margin-top: 0; margin-bottom: 8px; font-size: 0.98rem; }
 .evidence-card ul, .action-card ul { padding-left: 18px; color: var(--muted); line-height: 1.7; }
 .score-pill { display: inline-block; margin-top: 10px; padding: 6px 10px; border-radius: 999px; font-weight: 700; background: rgba(78,163,255,0.16); color: var(--accent); }
 .architecture { margin-top: 20px; padding: 24px; border-radius: 24px; background: rgba(15,28,45,0.9); border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 14px 30px rgba(0,0,0,0.16); }
@@ -94,6 +110,7 @@ a { color: var(--text); background: rgba(255,255,255,0.08); }
 @media (max-width: 1100px) {
   .dashboard { grid-template-columns: 1fr; }
   .flow-grid { grid-template-columns: 1fr 1fr; }
+  .comparison-card { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
   .hero { flex-direction: column; }
