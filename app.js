@@ -122,12 +122,8 @@ function renderDetail() {
 
     <!-- Score Comparison -->
     <div class="score-comparison">
-        <div class="score-box legacy-dim" title="What the old hardcoded keyword checker thought">
-            <h4>Legacy Rule Score</h4>
-            <span class="score-val">${legacyScore}</span>
-        </div>
         <div class="score-box ai-highlight">
-            <h4>SLM Cognitive Score</h4>
+            <h4>SLM Cognitive Risk Score</h4>
             <span class="score-val">${slmScore}</span>
         </div>
     </div>
