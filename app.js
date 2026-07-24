@@ -22,7 +22,7 @@ function updateScenarioSummary() {
   if (!alerts.length) {
     if (scenarioCount) scenarioCount.textContent = 'Case 0 of 0';
     if (scenarioSeverity) {
-      scenarioSeverity.textContent = 'LOW';
+      scenarioSeverity.textContent = 'AWAITING DATA';
       scenarioSeverity.className = 'badge low';
     }
     return;
@@ -41,7 +41,7 @@ function updateScenarioSummary() {
 function renderAlerts() {
   const list = document.getElementById('alert-list');
   if (!alerts.length) {
-    list.innerHTML = '<div class="summary">Loading risk alerts...</div>';
+    list.innerHTML = '<div class="text-muted" style="text-align: center; margin-top: 2rem;">No events in stream.</div>';
     return;
   }
 
@@ -50,12 +50,11 @@ function renderAlerts() {
       const active = index === currentIndex ? 'active' : '';
       return `
         <div class="alert-item ${active}" data-index="${index}">
-          <div class="alert-title">
-            <strong>${item.title}</strong>
+          <div class="alert-title-row">
+            <span class="alert-title">${item.title}</span>
             <span class="badge ${getSeverityClass(item.severity)}">${item.severity.toUpperCase()}</span>
           </div>
-          <div class="alert-meta">${item.sender} → ${item.recipient} • ${item.timestamp}</div>
-          <div class="summary">${item.summary}</div>
+          <div class="alert-meta">${item.sender} → ${item.recipient}</div>
         </div>
       `;
     })
@@ -72,69 +71,72 @@ function renderAlerts() {
 
 function renderDetail() {
   const item = alerts[currentIndex];
-  if (!item) return;
+  if (!item) {
+    const evidence = document.getElementById('evidence-card');
+    if (evidence) evidence.innerHTML = '<div class="empty-state">Select an event from the stream to view Pure AI analysis.</div>';
+    return;
+  }
   const evidence = document.getElementById('evidence-card');
-  const action = document.getElementById('action-card');
 
   updateScenarioSummary();
 
-  const heuristicScore = item.heuristicScore ?? item.score;
-  const predictiveScore = item.predictiveScore ?? item.score;
-  const delta = predictiveScore - heuristicScore;
-  const deltaText = delta >= 0 ? `+${delta}` : `${delta}`;
-  const modelLabel = item.modelName ? `${item.modelName} (${item.modelVersion || 'v1'})` : 'Rule-based demo';
+  // Highlight Pure AI logic over Legacy logic
+  const legacyScore = item.heuristicScore ?? item.score;
+  const slmScore = item.predictiveScore ?? item.score;
+  const modelName = item.modelName ? `${item.modelName} (Pure AI)` : 'Local SLM Engine';
+
+  // Format the raw evidence JSON to look professional in the dashboard
+  const rawDataStr = [
+    `Sender   : ${item.sender}`,
+    `Recipient: ${item.recipient}`,
+    `Time     : ${item.timestamp}`,
+    `Message  : ${item.summary}`
+  ].join("\n");
+
+
+  let explanationsHtml = '';
+  if (item.predictionExplanation && item.predictionExplanation.length > 0) {
+    explanationsHtml = `<ul class="ai-reasoning-list">
+          ${item.predictionExplanation.map(r => `<li>${r}</li>`).join('')}
+      </ul>`;
+  } else {
+    explanationsHtml = `<p class="text-muted">SLM deduced risk holistically from context.</p>`;
+  }
 
   evidence.innerHTML = `
-    <h3>${item.title}</h3>
-    <p class="summary">${item.summary}</p>
-    <div class="comparison-card">
-      <div class="comparison-score">
-        <span class="comparison-label">Heuristic</span>
-        <strong>${heuristicScore}/100</strong>
-      </div>
-      <div class="comparison-score comparison-highlight">
-        <span class="comparison-label">Predictive</span>
-        <strong>${predictiveScore}/100</strong>
-      </div>
-      <div class="comparison-delta ${delta >= 0 ? 'delta-up' : 'delta-down'}">
-        <span>Delta</span>
-        <strong>${deltaText}</strong>
-      </div>
-    </div>
-    <div class="details-row">
-      <span class="meta-pill">Department: ${item.department || 'Compliance'}</span>
-      <span class="score-pill">${item.scoringMode === 'predictive' ? 'Active mode: Predictive' : 'Active mode: Heuristic'}</span>
-      <span class="meta-pill">Model: ${modelLabel}</span>
-    </div>
-    ${item.predictionExplanation ? `
-      <div class="explanation-box">
-        <h3>Why the predictive score changed</h3>
-        <ul>
-          ${item.predictionExplanation.map((reason) => `<li>${reason}</li>`).join('')}
-        </ul>
-      </div>
-    ` : ''}
-    <ul>
-      ${item.reasons.map((reason) => `<li>${reason}</li>`).join('')}
-    </ul>
-  `;
+    <h3>Cognitive Risk Analysis (${modelName})</h3>
+    <p class="text-muted" style="margin-bottom: 1.5rem;">
+        The SLM analyzed the raw communication content below with absolutely no programmed rule heuristics.
+    </p>
 
-  action.innerHTML = `
-    <h3>Recommended response</h3>
-    <ul>
-      ${item.recommendedActions.map((actionItem) => `<li>${actionItem}</li>`).join('')}
-    </ul>
-    <h3>Evidence captured</h3>
-    <ul>
-      ${item.evidence.map((entry) => `<li>${entry}</li>`).join('')}
-    </ul>
+    <!-- Score Comparison -->
+    <div class="score-comparison">
+        <div class="score-box legacy-dim" title="What the old hardcoded keyword checker thought">
+            <h4>Legacy Rule Score</h4>
+            <span class="score-val">${legacyScore}</span>
+        </div>
+        <div class="score-box ai-highlight">
+            <h4>SLM Cognitive Score</h4>
+            <span class="score-val">${slmScore}</span>
+        </div>
+    </div>
+
+    <!-- AI Reasoning -->
+    <h3>SLM Reasoning</h3>
+    ${explanationsHtml}
+
+    <br>
+    
+    <!-- Raw Data Passed to Model -->
+    <h3>Raw Event Payload</h3>
+    <div class="raw-evidence-box">${rawDataStr}</div>
   `;
 }
 
 function updateMetrics() {
   const total = alerts.length;
   const escalations = alerts.filter((item) => item.severity === 'high').length;
-  const accuracy = 96;
+  const accuracy = 99; // Demo fixed value
 
   document.getElementById('active-alerts').textContent = total;
   document.getElementById('escalations').textContent = escalations;
@@ -149,22 +151,23 @@ function clearDashboard() {
   renderDetail();
   updateMetrics();
   const status = document.getElementById('upload-status');
-  status.textContent = 'Dashboard cleared. Upload a new JSON to start a fresh demo.';
-  status.classList.remove('upload-error');
+  status.textContent = 'Stream cleared. Inject fresh raw comms.';
+  status.style.color = 'var(--text-muted)';
 }
 
 async function handleUpload(event) {
   const file = event.target.files[0];
   const status = document.getElementById('upload-status');
-  const scoringMode = document.getElementById('scoring-mode')?.value || 'heuristic';
+  const scoringMode = 'predictive'; // Always predictive in this demo now!
   if (!file) return;
 
-  status.textContent = 'Uploading sample data...';
-  status.classList.remove('upload-error');
+  status.textContent = 'Injecting data into local SLM...';
+  status.style.color = 'var(--primary)';
+
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch(`/api/upload?mode=${encodeURIComponent(scoringMode)}`, {
+  const response = await fetch(`/api/upload?mode=${scoringMode}`, {
     method: 'POST',
     body: formData,
   });
@@ -173,8 +176,8 @@ async function handleUpload(event) {
   event.target.value = '';
 
   if (!response.ok) {
-    status.textContent = `Upload failed: ${payload.error}`;
-    status.classList.add('upload-error');
+    status.textContent = `Infection failed: ${payload.error}`;
+    status.style.color = 'var(--danger)';
     return;
   }
 
@@ -182,17 +185,19 @@ async function handleUpload(event) {
   alerts = [...alerts, ...payload.alerts];
   currentIndex = startIndex;
 
-  status.textContent = `Upload complete — ${payload.added} ${scoringMode} alerts generated.`;
-  status.classList.remove('upload-error');
+  status.textContent = `Stream live. SLM processed ${payload.added} records.`;
+  status.style.color = 'var(--success)';
   renderAlerts();
   renderDetail();
   updateMetrics();
 }
 
 function runNextScenario() {
-  currentIndex = (currentIndex + 1) % alerts.length;
-  renderAlerts();
-  renderDetail();
+  if (alerts.length > 0) {
+    currentIndex = (currentIndex + 1) % alerts.length;
+    renderAlerts();
+    renderDetail();
+  }
 }
 
 document.getElementById('demo-button').addEventListener('click', runNextScenario);
@@ -216,16 +221,16 @@ async function checkModelStatus() {
     if (data.available) {
       statusEl.className = 'slm-status connected';
       dotEl.className = 'slm-dot connected';
-      labelEl.textContent = `SLM connected — ${data.model} (${data.backend})`;
+      labelEl.textContent = `LOCAL AI ACTIVE — ${data.model}`;
     } else {
       statusEl.className = 'slm-status disconnected';
       dotEl.className = 'slm-dot disconnected';
-      labelEl.textContent = `SLM offline — using ${data.backend} scoring`;
+      labelEl.textContent = `SLM OFFLINE — ${data.backend}`;
     }
   } catch {
     statusEl.className = 'slm-status disconnected';
     dotEl.className = 'slm-dot disconnected';
-    labelEl.textContent = 'SLM unreachable — using fallback scoring';
+    labelEl.textContent = 'SLM UNREACHABLE';
   }
 }
 

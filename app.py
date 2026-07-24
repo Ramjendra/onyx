@@ -222,10 +222,7 @@ def _call_ollama(record, feature_vector):
         f'  Sender: {record.get("sender", "unknown")}\n'
         f'  Recipient: {record.get("recipient", "unknown")}\n'
         f'  Timestamp: {record.get("timestamp", "unknown")}\n'
-        f'  Risk Level Tag: {record.get("riskLevel", "low")}\n'
-        f'  Risk Tags: {", ".join(_normalize_tags(record)) or "none"}\n'
         f'  Message: {record.get("message", record.get("body", "N/A"))}\n\n'
-        f'Feature Vector: {json.dumps(feature_vector)}\n\n'
         f'Respond with ONLY the JSON object.'
     )
 
