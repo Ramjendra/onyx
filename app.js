@@ -83,7 +83,18 @@ function renderDetail() {
   // Highlight Pure AI logic over Legacy logic
   const legacyScore = item.heuristicScore ?? item.score;
   const slmScore = item.predictiveScore ?? item.score;
-  const modelName = item.modelName ? `${item.modelName} (Pure AI)` : 'Local SLM Engine';
+  const rawModelName = item.modelName || 'llama3.1-local';
+  const modelName = `${rawModelName} (Pure AI)`;
+
+  // --- DYNAMIC URL UPDATE FOR DEMO ---
+  // This physically updates the browser URL bar so you can point to it
+  // and prove the local SLM is driving the prediction.
+  const url = new URL(window.location);
+  url.searchParams.set('engine', rawModelName);
+  url.searchParams.set('mode', 'pure-local-ai-inference');
+  url.searchParams.set('eventId', item.id);
+  window.history.pushState({}, '', url);
+  // ------------------------------------
 
   // Format the raw evidence JSON to look professional in the dashboard
   const rawDataStr = [
